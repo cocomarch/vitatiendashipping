@@ -26,7 +26,6 @@ class VitatiendaShippingCondition extends ObjectModel
     public $shipping_weight;
     public $tax_inc;
     public $handling_charge;
-    public $id_group;
     public $active;
     public $date_add;
     public $date_upd;
@@ -43,7 +42,6 @@ class VitatiendaShippingCondition extends ObjectModel
             'shipping_weight' => array('type' => self::TYPE_FLOAT),
             'tax_inc' => array('type' => self::TYPE_BOOL, 'validate' => 'isBool'),
             'handling_charge' => array('type' => self::TYPE_BOOL, 'validate' => 'isBool'),
-            'id_group' => array('type' => self::TYPE_STRING),
             'active' => array('type' => self::TYPE_BOOL, 'validate' => 'isBool'),
             'date_add' => array('type' => self::TYPE_DATE, 'validate' => 'isDateFormat', 'required' => false),
             'date_upd' => array('type' => self::TYPE_DATE, 'validate' => 'isDateFormat', 'required' => false),
@@ -60,16 +58,17 @@ class VitatiendaShippingCondition extends ObjectModel
     public function getConditionById($idCondition)
     {
         return Db::getInstance()->getRow(
-            'SELECT acf.*, acsg.id_group FROM '._DB_PREFIX_.'vitatiendashipping_condition acf '
+            'SELECT acf.*, GROUP_CONCAT(acsg.id_user_group) AS id_user_group FROM '._DB_PREFIX_.'vitatiendashipping_condition acf '
             . VitatiendaShippingCondition::addSqlAssociationCustom('vitatiendashipping_condition', 'acf') . '
-            inner join '._DB_PREFIX_.'vitatiendashipping_condition_user_group acsg on acsg.id_condition = acf.id_condition 
-            WHERE acf.id_condition = '. (int) $idCondition
+            left join '._DB_PREFIX_.'vitatiendashipping_condition_user_group acsg on acsg.id_condition = acf.id_condition 
+            WHERE acf.id_condition = '. (int) $idCondition .' GROUP BY acf.id_condition'
         );
     }
 
-    public function checkLocationForShippingByZone($idCarrierReference = false, $idZone = false)
+    public function checkLocationForShippingByGroup($idCarrierReference = false, $idZone = false, $id_user_group, $idCountry = false)
     {
-        $sql = 'SELECT wc.* FROM `'._DB_PREFIX_.'vitatiendashipping_condition` wc
+        $sql = 'SELECT wc.*, wl.id_country FROM `'._DB_PREFIX_.'vitatiendashipping_condition_user_group` vcsg
+        LEFT JOIN `'._DB_PREFIX_.'vitatiendashipping_condition` wc ON (wc.`id_condition` = vcsg.`id_condition`)
         LEFT JOIN `'._DB_PREFIX_.'vitatiendashipping_condition_location` wl ON (wc.`id_condition` = wl.`id_condition`) '
             . VitatiendaShippingCondition::addSqlAssociationCustom('vitatiendashipping_condition', 'wc');
         if ($idCarrierReference) {
@@ -78,9 +77,37 @@ class VitatiendaShippingCondition extends ObjectModel
         if ($idZone) {
             $sql .= ' AND wl.id_zone = '. (int) $idZone;
         }
+        if ($idCountry) {
+            $sql .= ' AND wl.id_country = '. (int) $idCountry;
+        }        
         $sql .= ' AND wc.active = 1';
+        $sql .= ' AND vcsg.id_user_group = '. (int) $id_user_group;
+        $sql .= ' ORDER BY wc.id_condition DESC';
+        return Db::getInstance()->getRow($sql);
+    }
+
+
+
+    public function checkLocationForShippingByZone($idCarrierReference = false, $idZone = false, $idCountry = false)
+    {
+        $sql = 'SELECT wc.*, wl.id_country FROM `'._DB_PREFIX_.'vitatiendashipping_condition` wc
+        LEFT JOIN '._DB_PREFIX_.'vitatiendashipping_condition_user_group acsg on acsg.id_condition = wc.id_condition 
+        LEFT JOIN `'._DB_PREFIX_.'vitatiendashipping_condition_location` wl ON (wc.`id_condition` = wl.`id_condition`) '
+            . VitatiendaShippingCondition::addSqlAssociationCustom('vitatiendashipping_condition', 'wc');
+        if ($idCarrierReference) {
+            $sql .= 'WHERE wl.id_carrier_reference = '. (int) $idCarrierReference;
+        }
+        if ($idZone) {
+            $sql .= ' AND wl.id_zone = '. (int) $idZone;
+        }
+        if ($idCountry) {
+            $sql .= ' AND wl.id_country = '. (int) $idCountry;
+        }          
+        $sql .= ' AND wc.active = 1';
+        $sql .= ' AND acsg.id_user_group is null';
         $sql .= ' ORDER BY wl.id_location DESC';
-        return Db::getInstance()->executeS($sql);
+         
+        return Db::getInstance()->getRow($sql);
     }
 
     public function checkLocationForShipping($idCarrierReference = false, $idZone = false, $idCountry = false)
@@ -98,6 +125,7 @@ class VitatiendaShippingCondition extends ObjectModel
         $sql .= ' AND wc.active = 1';
         // $sql .= ' ORDER BY wl.id_location DESC';
         $sql .= ' ORDER BY wc.id_condition ASC';
+        //dump($sql);
         return Db::getInstance()->getRow($sql);
     }
 

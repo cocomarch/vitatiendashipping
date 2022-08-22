@@ -1,23 +1,4 @@
-{*
-**
-* 2010-2020 Webkul.
-*
-* NOTICE OF LICENSE
-*
-* All right is reserved,
-* Please go through this link for complete license : https://store.webkul.com/license.html
-*
-* DISCLAIMER
-*
-* Do not edit or add to this file if you wish to upgrade this module to newer
-* versions in the future. If you wish to customize this module for your
-* needs please refer to https://store.webkul.com/customisation-guidelines/ for more information.
-*
-*  @author    Webkul IN <support@webkul.com>
-*  @copyright 2010-2020 Webkul IN
-*  @license   https://store.webkul.com/license.html
-*
-*}
+
 
 <form id="vitatiendashipping_condition_form" class="defaultForm form-horizontal VitatiendaShippingCondition" action="" method="post">
     <input type="hidden" name="id_condition" id="id_condition" value="{if isset($conditionData)}{$conditionData.id_condition}{/if}">
@@ -52,7 +33,7 @@
                                 <option value="{$currencies.id_currency}"
                                 {if isset($conditionData) && $conditionData.id_currency == $currencies.id_currency}
                                 selected {elseif $currencies.id_currency == $defaultCurrency} selected {/if}>
-                                {$currencies.sign}
+                                {$currencies.name}
                                 </option>
                             {/foreach}
                             {/if}
@@ -60,7 +41,7 @@
                     </div>
                 </div>
             </div>
-            <div class="form-group">
+            {* <div class="form-group">
                 <label class="control-label col-lg-3 required">
                     {l s='Free shipping start from weight' mod='vitatiendashipping'}
                 </label>
@@ -72,7 +53,7 @@
                         </span>
                     </div>
                 </div>
-            </div>
+            </div> *}
             <div class="form-group">
                 <label class="control-label col-lg-3">
                     <span class="label-tooltip" data-toggle="tooltip" data-html="true" title="" data-original-title="

@@ -28,9 +28,10 @@ class VitaTiendaShipping extends Module
         if (!parent::install()
             || !$this->createTable()
             || !$this->registerHook('actionAdminControllerSetMedia')
-            || !$this->registerHook('displayCheckoutSubtotalDetails')
+            || !$this->registerHook('displayShoppingCartFooter')
             || !$this->registerHook('displayProductAdditionalInfo')
             || !$this->registerHook('displayCheckoutSummaryTop')
+            || !$this->registerHook('actionVitaTiendaCartGetPackageShippingCost')
             || !$this->callInstallTab()) {
             return false;
         }
@@ -42,8 +43,8 @@ class VitaTiendaShipping extends Module
 
     public function callInstallTab()
     {
-        $this->installTab('AfsModule', 'Avail Free Shipping');
-        $this->installTab('VitatiendaShippingCondition', 'Manage Conditions', 'AfsModule');
+        $this->installTab('VitatiendaShippingModule', 'Vitatienda Shipping');
+        $this->installTab('VitatiendaShippingCondition', 'Manage Conditions', 'VitatiendaShippingModule');
         return true;
     }
 
@@ -110,31 +111,25 @@ class VitaTiendaShipping extends Module
         } else {
             $wkIdCountry = $this->context->country->id;
         }
-        $wkIdZone = Country::getIdZone($wkIdCountry);
+        $wkIdZone = State::getIdZone($addressObj->id_state);
+        if(empty($wkIdZone)){
+            $wkIdZone = Country::getIdZone($wkIdCountry);
+        }
         $idCarrier = $this->context->cart->id_carrier;
         $afsCondition = new VitatiendaShippingCondition();
 
-        $resultByZone = $afsCondition->checkLocationForShippingByZone(
-            (new Carrier($idCarrier))->id_reference,
-            $wkIdZone
+        if (isset(Context::getContext()->customer)) {
+            $id_customer_group = Context::getContext()->customer->id_default_group;
+        }                
+        $result = $afsCondition->checkLocationForShippingByGroup(
+            (new Carrier($id_carrier))->id_reference,
+            $wkIdZone, $id_customer_group, $wkIdCountry
         );
-
-        $conditionCountry = array();
-        foreach ($resultByZone as $rs) {
-            $conditionCountry[] = $rs['id_country'];
-        }
-        if (in_array($wkIdCountry, $conditionCountry)) {
-            $result = $afsCondition->checkLocationForShipping(
-                (new Carrier($idCarrier))->id_reference,
-                $wkIdZone,
-                $wkIdCountry
-            );
-        } else {
-            $result = $afsCondition->checkLocationForShipping(
-                (new Carrier($idCarrier))->id_reference,
-                $wkIdZone,
-                0
-            );
+        if(empty($result)){
+            $result = $afsCondition->checkLocationForShippingByZone(
+                (new Carrier($id_carrier))->id_reference,
+                $wkIdZone, $wkIdCountry
+            );             
         }
 
         if (Configuration::get('VITATIENDA_SHIPPING_ADMIN_APPROVE')) {
@@ -247,9 +242,10 @@ class VitaTiendaShipping extends Module
     /**
      * Function to show free shipping alert on cart page
      */
-    public function hookDisplayCheckoutSubtotalDetails()
+    public function hookDisplayShoppingCartFooter()
     {
-        if ('cart' == $this->context->controller->php_self) {
+        //dump($this->context->controller->php_self);
+        if ('order' == $this->context->controller->php_self) {
             $afsResult = $this->getWeightAndPriceForFreeShipping();
             $priceToAfs = $afsResult['priceToAfs'];
             $weightToAfs = $afsResult['weightToAfs'];
@@ -257,10 +253,13 @@ class VitaTiendaShipping extends Module
             $productWeight = $afsResult['productWeight'];
             $additionalShipping = $afsResult['additionalShipping'];
 
-            if ('cart' == $this->context->controller->php_self) {
+            if ('order' == $this->context->controller->php_self) {
+                //dump( $afsResult);
                 if (!empty(json_decode(Configuration::get('VITATIENDA_SHIPPING_VISIBILITY_PAGE')))) {
                     if (in_array(1, json_decode(Configuration::get('VITATIENDA_SHIPPING_VISIBILITY_PAGE')))) {
-                        if ($productTotal < $priceToAfs  && $productWeight < $weightToAfs) {
+                        //dump($productTotal , $priceToAfs);
+                        //$priceToAfs = 99.97;
+                        if ($productTotal < $priceToAfs ) {
                             if ($additionalShipping > 0) {
                                 $moreAmt = $priceToAfs - $productTotal;
                                 if ($moreAmt > 0) {
@@ -626,4 +625,88 @@ class VitaTiendaShipping extends Module
 
         return true;
     }
+
+    public function hookActionVitaTiendaCartGetPackageShippingCost($params)
+    {
+        $id_carrier = $params['id_carrier'];
+        $carrier = $params['carrier'];
+        $cart = $params['cart'];
+        $configuration =  $params['configuration'];
+
+
+        include_once dirname(__FILE__).'/../../modules/vitatiendashipping/classes/VitatiendaShippingCondition.php';
+        $addressObj = new Address($cart->id_address_delivery);
+        if (isset($addressObj->id_country) && $addressObj->id_country) {
+            if (isset(Context::getContext()->customer)) {
+                $id_customer_group = Context::getContext()->customer->id_default_group;
+            }                
+            $wkIdCountry = $addressObj->id_country;
+            $wkIdZone = State::getIdZone($addressObj->id_state);
+            if(empty($wkIdZone)){
+                $wkIdZone = Country::getIdZone($wkIdCountry);
+            }
+            //dump($wkIdZone);
+            //$wkIdZone = Country::getIdZone($wkIdCountry);
+            $afsCondition = new VitatiendaShippingCondition();
+            $result = $afsCondition->checkLocationForShippingByGroup(
+                (new Carrier($id_carrier))->id_reference,
+                $wkIdZone, $id_customer_group, $wkIdCountry
+            );
+            if(empty($result)){
+                $result = $afsCondition->checkLocationForShippingByZone(
+                    (new Carrier($id_carrier))->id_reference,
+                    $wkIdZone, $wkIdCountry
+                );             
+            }
+            $productTotal = 0;
+            $productWeight = 0;
+            foreach ($cart->getProducts() as $presentCart) {
+                if (isset($presentCart['total_wt'])) {
+                    $productTotal += $presentCart['total_wt'];
+                }
+                $productWeight += $presentCart['cart_quantity'] * $presentCart['weight'];
+            }
+            if ($result) {
+                if ($cart->id_currency == $result['id_currency']) {
+                    $priceToAfs = $result['shipping_price'];
+                } else {
+                    $priceToAfsConverted = Tools::convertPriceFull(
+                        $result['shipping_price'],
+                        Currency::getCurrencyInstance((int) $result['id_currency']),
+                        Currency::getCurrencyInstance((int) $cart->id_currency)
+                    );
+                    $priceToAfs = (float)Tools::ps_round((float)$priceToAfsConverted, 2);
+                }
+                if ($priceToAfs <= $productTotal) {
+                    $shipping_cost = 0;
+                    if ($result['handling_charge'] == 1) {
+                        $shipping_cost += (float)$configuration['PS_SHIPPING_HANDLING'];
+                    }
+                    if ($result['tax_inc'] == 1) {
+                        $shipping_cost_for_tax = 0;
+                        if ($shipping_method == Carrier::SHIPPING_METHOD_WEIGHT) {
+                            $shipping_cost_for_tax += $carrier->getDeliveryPriceByWeight(
+                                $cart->getTotalWeight($product_list),
+                                $wkIdZone
+                            );
+                        } else { // by price
+                            $shipping_cost_for_tax += $carrier->getDeliveryPriceByPrice(
+                                $order_total,
+                                $wkIdZone,
+                                (int)$cart->id_currency
+                            );
+                        }
+                        $addressData = Address::initialize((int)$address_id);
+                        $carrierData = $cart::$_carriers[$id_carrier];
+                        $get_carrier_tax = $carrierData->getTaxesRate($addressData);
+                        $shipping_tax = $shipping_cost_for_tax * ($get_carrier_tax/100);
+                        $shipping_cost += $shipping_tax;
+                    } 
+                    return array("override" => true, "shipping_cost" => $shipping_cost);
+                }
+            }
+        }
+        return array("override" => false);
+    }
+
 }

@@ -269,14 +269,15 @@ class VitatiendaShippingConditionController extends ModuleAdminController
                 if (isset($sortedCountryList)) {
                     $this->context->smarty->assign('sortedCountryList', $sortedCountryList);
                 }
+                //dump($conditionData['id_user_group']); die();
                 $this->context->smarty->assign(
                     array(
-                        'addedGroups' => json_decode($conditionData['id_group']),
+                        'addedGroups' => explode(",",$conditionData['id_user_group']),
                         'conditionData' => $conditionData,
                         'editMsg' => 1,
                     )
                 );
-            }
+            }           
             $zoneData = Zone::getZones();
             $carrierData = Carrier::getCarriers($this->context->language->id);
             $groupData = Group::getGroups($this->context->language->id);
@@ -295,7 +296,6 @@ class VitatiendaShippingConditionController extends ModuleAdminController
                     'title' => $this->l('Save'),
                 ),
             );
-
             return parent::renderForm();
         }
     }
@@ -333,6 +333,7 @@ class VitatiendaShippingConditionController extends ModuleAdminController
                 $afsCondition->save();
                 $insertedId = $afsCondition->id;
                 $afsCondition->deleteLocation($idCondition);
+                $afsCondition->deleteUserGroups($idCondition);
 
                 if (is_array($idGroups) && !empty($idGroups)) {
                     foreach ($idGroups as $idGroup) {
