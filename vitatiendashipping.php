@@ -115,7 +115,7 @@ class VitaTiendaShipping extends Module
         if(empty($wkIdZone)){
             $wkIdZone = Country::getIdZone($wkIdCountry);
         }
-        $idCarrier = $this->context->cart->id_carrier;
+        $id_carrier = $this->context->cart->id_carrier;
         $afsCondition = new VitatiendaShippingCondition();
 
         if (isset(Context::getContext()->customer)) {
@@ -130,6 +130,10 @@ class VitaTiendaShipping extends Module
                 (new Carrier($id_carrier))->id_reference,
                 $wkIdZone, $wkIdCountry
             );             
+        }
+
+        if(empty($result)){
+            return [];
         }
 
         if (Configuration::get('VITATIENDA_SHIPPING_ADMIN_APPROVE')) {
@@ -247,6 +251,9 @@ class VitaTiendaShipping extends Module
         //dump($this->context->controller->php_self);
         if ('order' == $this->context->controller->php_self) {
             $afsResult = $this->getWeightAndPriceForFreeShipping();
+            if(empty($afsResult)){
+                return;
+            }
             $priceToAfs = $afsResult['priceToAfs'];
             $weightToAfs = $afsResult['weightToAfs'];
             $productTotal = $afsResult['productTotal'];
